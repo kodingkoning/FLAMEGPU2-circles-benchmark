@@ -10,9 +10,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 
+# DEFAULT_INPUT_DIR = "./sample/data/v100-470.82.01/alpha.2-v100-11.0-beltsoff"
+# DEFAULT_OUTPUT_DIR = "./sample/figures/v100-470.82.01/alpha.2-v100-11.0-beltsoff"
 
-DEFAULT_INPUT_DIR = "./sample/data/v100-470.82.01/alpha.2-v100-11.0-beltsoff"
-DEFAULT_OUTPUT_DIR = "./sample/figures/v100-470.82.01/alpha.2-v100-11.0-beltsoff"
+DEFAULT_INPUT_DIR = "./build/combined-FLAME-cupy-results"
+DEFAULT_OUTPUT_DIR = "./build/figures"
 
 # Maximum DPI
 MAX_SANE_DPI = 1000
@@ -27,13 +29,17 @@ FIGSIZE_INCHES = (16, 9)
 # CSV files that should be preset in the input directory.
 EXPECTED_CSV_FILES=[
     "fixed-density_perSimulationCSV.csv",
-    "fixed-density_perStepPerSimulationCSV.csv",
+    # "fixed-density_perStepPerSimulationCSV.csv",
     "variable-density_perSimulationCSV.csv",
-    "variable-density_perStepPerSimulationCSV.csv",
+    # "variable-density_perStepPerSimulationCSV.csv",
     "comm-radius_perSimulationCSV.csv",
-    "comm-radius_perStepPerSimulationCSV.csv",
+    # "comm-radius_perStepPerSimulationCSV.csv",
     "sort-period_perSimulationCSV.csv",
-    "sort-period_perStepPerSimulationCSV.csv"
+    # "sort-period_perStepPerSimulationCSV.csv",
+    "data-type_perSimulationCSV.csv",
+    "dimensions_perSimulationCSV.csv",
+    "high-density_perSimulationCSV.csv",
+    "model-type_perSimulationCSV.csv"
 ]
 
 
@@ -52,7 +58,7 @@ GROUP_BY_COLUMNS_PER_SIM = ["GPU","release_mode","seatbelts_on","model","steps",
 
 # Handle columns which only appear in specific files
 FILE_SPECIFIC_COLUMNS = {
-   'sort-period_perSimulationCSV.csv': "sort_period" 
+   'sort-period_perSimulationCSV.csv': "sort_period"
 }
 
 # Aggregate operations to apply across grouped csv rows, for the per-step per-sim csvs
@@ -78,40 +84,40 @@ AGGREGATIONS_PER_SIM = {
 def cli():
     parser = argparse.ArgumentParser(description="Python script to generate figures from csv files")
     parser.add_argument(
-        "-v", 
-        "--verbose", 
-        action="store_true", 
+        "-v",
+        "--verbose",
+        action="store_true",
         help="increase verbosity of output"
     )
     parser.add_argument(
-        "-f", 
-        "--force", 
-        action="store_true", 
+        "-f",
+        "--force",
+        action="store_true",
         help="Force overwriting of files (surpress user confirmation)"
     )
     parser.add_argument(
-        "-o", 
-        "--output-dir", 
-        type=str, 
+        "-o",
+        "--output-dir",
+        type=str,
         help="directory to output figures into.",
         default=DEFAULT_OUTPUT_DIR
     )
     parser.add_argument(
-        "--dpi", 
-        type=int, 
+        "--dpi",
+        type=int,
         help="DPI for output file",
         default=DEFAULT_DPI
     )
     parser.add_argument(
         "-s",
-        "--show", 
+        "--show",
         action="store_true",
         help="Show the plot(s)"
     )
     parser.add_argument(
         "-i",
-        "--input_dir", 
-        type=str, 
+        "--input_dir",
+        type=str,
         help="Input directory, containing the 4 expected input csv files",
         default=DEFAULT_INPUT_DIR
     )
@@ -141,7 +147,7 @@ def validate_args(args):
             valid = False
 
     # Ensure that the input direcotry exists, and that all required inputs are present.
-    input_dir = pathlib.Path(args.input_dir) 
+    input_dir = pathlib.Path(args.input_dir)
     if input_dir.is_dir():
         missing_files = []
         for csv_filename in EXPECTED_CSV_FILES:
@@ -211,7 +217,7 @@ def process_data(input_dataframes, verbose):
         grouped_df = input_df.groupby(by=group_by_columns).agg(aggregations)
         # Apply the new column names
         grouped_df.columns = new_column_labels
-        # Reset the index, 
+        # Reset the index,
         grouped_df = grouped_df.reset_index()
 
         grouped_df["env_volume"] = grouped_df["env_width"] * grouped_df["env_width"] * grouped_df["env_width"]
@@ -255,7 +261,7 @@ def store_processed_data(input_dataframes, processed_dataframes, output_dir, for
 
         # Get the max rtc time from the input file, and also output the mean too for good measure.
         # @todo - might be better to have a threshold cutoff?
-        if "s_rtc" in input_df: 
+        if "s_rtc" in input_df:
             max_s_rtc = input_df["s_rtc"].max()
             mean_s_rtc = input_df["s_rtc"].mean()
             print(f"{csv_name}: max_s_rtc {max_s_rtc:.6f}, mean_s_rtc {mean_s_rtc:.6f}")
@@ -305,7 +311,7 @@ def pretty_csv_key(csv_key):
 class PlotOptions:
     """Class for options for a single plot"""
     def __init__(
-        self, 
+        self,
         xkey: str,
         ykey: str,
         huekey: str = None,
@@ -350,12 +356,12 @@ class PlotOptions:
     def plot(self, df_in, output_prefix, output_dir, dpi, force, show, verbose):
         df = df_in
 
-        # Set a filename if needed. 
+        # Set a filename if needed.
         if self.filename is None:
             self.filename = f"{self.plot_type}--{self.xkey}--{self.ykey}--{self.huekey}--{self.stylekey}"
 
         # Use some seaborn deafault for fontsize etc.
-        sns.set_context(self.sns_context, rc={"lines.linewidth": 2.5})  
+        sns.set_context(self.sns_context, rc={"lines.linewidth": 2.5})
 
         # Set the general style.
         sns.set_style(self.sns_style)
@@ -363,14 +369,14 @@ class PlotOptions:
         # Filter the data using pandas queries if required.
         if self.df_query is not None and len(self.df_query):
             df = df.query(self.df_query)
-            
+
         # If the df is empty, skip.
         if df.shape[0] == 0:
             print(f"Skipping plot {self.filename} - 0 rows of data")
             return False
 
         # Get the number of palette values required.
-        huecount = len(df[self.huekey].unique()) if self.huekey is not None else 1 
+        huecount = len(df[self.huekey].unique()) if self.huekey is not None else 1
 
         # Set palette.
         palette = sns.color_palette(self.sns_palette, huecount)
@@ -402,11 +408,11 @@ class PlotOptions:
         if self.plot_type == "lineplot":
             # plot the data @todo - lineplot vs scatter?
             g = sns.lineplot(
-                data=df, 
-                x=self.xkey, 
-                y=self.ykey, 
-                hue=self.huekey, 
-                style=self.stylekey, 
+                data=df,
+                x=self.xkey,
+                y=self.ykey,
+                hue=self.huekey,
+                style=self.stylekey,
                 markers=True,
                 dashes = True,
                 ax=ax,
@@ -416,11 +422,11 @@ class PlotOptions:
             )
         elif self.plot_type == "scatterplot":
             g = sns.scatterplot(
-                data=df, 
-                x=self.xkey, 
-                y=self.ykey, 
-                hue=self.huekey, 
-                style=self.stylekey, 
+                data=df,
+                x=self.xkey,
+                y=self.ykey,
+                hue=self.huekey,
+                style=self.stylekey,
                 markers=True,
                 ax=ax,
                 # size=6,
@@ -474,7 +480,7 @@ class PlotOptions:
             # If either were found, replace with the pretty version
             found_count = 0
             for i, label in enumerate(labels):
-                if label == self.huekey: 
+                if label == self.huekey:
                     labels[i] = huelabel
                     found_count += 1
                 elif label == self.stylekey:
@@ -489,13 +495,13 @@ class PlotOptions:
                 pass
             ax.legend(handles=handles, labels=labels, loc=loc, bbox_to_anchor=bbox_to_anchor, borderaxespad=LEGEND_BORDER_PAD)
 
-        # if an output directory is provided, save the figure to disk. 
+        # if an output directory is provided, save the figure to disk.
         if output_dir is not None:
             output_dir = pathlib.Path(output_dir)
             # Prefix the filename with the experiment prefix.
             output_filename = f"{output_prefix}--{self.filename}"
 
-            # Get the path for output 
+            # Get the path for output
             output_filepath = output_dir / output_filename
             # If the file does not exist, or force is true write the otuput file, otherwise error.
             if not output_filepath.exists() or force:
@@ -521,7 +527,7 @@ SEQUENTIAL_PALETTE = "viridis"
 
 # Define the figures to generate for each input CSV.
 PLOTS_PER_CSV={
-    # No need for sequential colour pallete 
+    # No need for sequential colour pallete
     "fixed-density_perSimulationCSV.csv": [
         PlotOptions(
             filename="volume--step-s--model--all.png",
@@ -598,6 +604,310 @@ PLOTS_PER_CSV={
         #     maxy=1000,
         # )
     ],
+    "high-density_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="high-density-volume--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="high-density-volume--step-s--model--zoomed.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+            minx=0,
+            miny=0,
+            maxy=0.1,
+        ),
+        # PlotOptions(
+        #     filename="volume--message-count--model--zoomed.png",
+        #     plot_type="lineplot",
+        #     xkey="env_volume",
+        #     ykey="mean_mean_message_count",
+        #     huekey="model",
+        #     stylekey="model",
+        #     sns_palette=QUALITATIVE_PALETTE,
+        #     # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+        #     minx=0,
+        #     miny=0,
+        #     maxy=1000,
+        # ),
+        PlotOptions(
+            filename="high-density-agent_count--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="high-density-agent_count--step-s--model--zoomed.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+            minx=0,
+            miny=0,
+            maxy=0.1,
+        ),
+        # PlotOptions(
+        #     filename="volume--message-count--model--zoomed.png",
+        #     plot_type="lineplot",
+        #     xkey="env_volume",
+        #     ykey="mean_mean_message_count",
+        #     huekey="model",
+        #     stylekey="model",
+        #     sns_palette=QUALITATIVE_PALETTE,
+        #     # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+        #     minx=0,
+        #     miny=0,
+        #     maxy=1000,
+        # )
+    ],
+    "model-type_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="model-type-volume--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="model-type-volume--step-s--model--zoomed.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+            minx=0,
+            miny=0,
+            maxy=0.1,
+        ),
+        # PlotOptions(
+        #     filename="volume--message-count--model--zoomed.png",
+        #     plot_type="lineplot",
+        #     xkey="env_volume",
+        #     ykey="mean_mean_message_count",
+        #     huekey="model",
+        #     stylekey="model",
+        #     sns_palette=QUALITATIVE_PALETTE,
+        #     # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+        #     minx=0,
+        #     miny=0,
+        #     maxy=1000,
+        # ),
+        PlotOptions(
+            filename="model-type-agent_count--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="model-type-agent_count--step-s--model--zoomed.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+            minx=0,
+            miny=0,
+            maxy=0.1,
+        ),
+        # PlotOptions(
+        #     filename="volume--message-count--model--zoomed.png",
+        #     plot_type="lineplot",
+        #     xkey="env_volume",
+        #     ykey="mean_mean_message_count",
+        #     huekey="model",
+        #     stylekey="model",
+        #     sns_palette=QUALITATIVE_PALETTE,
+        #     # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+        #     minx=0,
+        #     miny=0,
+        #     maxy=1000,
+        # )
+    ],
+    "data-type_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="data-type-volume--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="data-type-volume--step-s--model--zoomed.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+            minx=0,
+            miny=0,
+            maxy=0.1,
+        ),
+        # PlotOptions(
+        #     filename="volume--message-count--model--zoomed.png",
+        #     plot_type="lineplot",
+        #     xkey="env_volume",
+        #     ykey="mean_mean_message_count",
+        #     huekey="model",
+        #     stylekey="model",
+        #     sns_palette=QUALITATIVE_PALETTE,
+        #     # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+        #     minx=0,
+        #     miny=0,
+        #     maxy=1000,
+        # ),
+        PlotOptions(
+            filename="data-type-agent_count--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="data-type-agent_count--step-s--model--zoomed.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+            minx=0,
+            miny=0,
+            maxy=0.1,
+        ),
+        # PlotOptions(
+        #     filename="volume--message-count--model--zoomed.png",
+        #     plot_type="lineplot",
+        #     xkey="env_volume",
+        #     ykey="mean_mean_message_count",
+        #     huekey="model",
+        #     stylekey="model",
+        #     sns_palette=QUALITATIVE_PALETTE,
+        #     # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+        #     minx=0,
+        #     miny=0,
+        #     maxy=1000,
+        # )
+    ],
+    "dimensions_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="dimensions-volume--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="dimensions-volume--step-s--model--zoomed.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+            minx=0,
+            miny=0,
+            maxy=0.1,
+        ),
+        # PlotOptions(
+        #     filename="volume--message-count--model--zoomed.png",
+        #     plot_type="lineplot",
+        #     xkey="env_volume",
+        #     ykey="mean_mean_message_count",
+        #     huekey="model",
+        #     stylekey="model",
+        #     sns_palette=QUALITATIVE_PALETTE,
+        #     # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+        #     minx=0,
+        #     miny=0,
+        #     maxy=1000,
+        # ),
+        PlotOptions(
+            filename="dimensions-agent_count--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="dimensions-agent_count--step-s--model--zoomed.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+            minx=0,
+            miny=0,
+            maxy=0.1,
+        ),
+        # PlotOptions(
+        #     filename="volume--message-count--model--zoomed.png",
+        #     plot_type="lineplot",
+        #     xkey="env_volume",
+        #     ykey="mean_mean_message_count",
+        #     huekey="model",
+        #     stylekey="model",
+        #     sns_palette=QUALITATIVE_PALETTE,
+        #     # df_query="model == 'circles_spatial3D' or model == 'circles_spatial3D_rtc'",
+        #     minx=0,
+        #     miny=0,
+        #     maxy=1000,
+        # )
+    ],
     "fixed-density_perStepPerSimulationCSV.csv": [
         # PlotOptions(
         #     filename="scatterplot--step--mean_s_step--volume--volume--spatial3D-rtc-only.png",
@@ -622,23 +932,23 @@ PLOTS_PER_CSV={
         #     sns_palette=SEQUENTIAL_PALETTE,
         # ),
         PlotOptions(
-            filename="volume--step-s--density--3drtc.png",
+            filename="volume--step-s--density--cupy-grid.png",
             plot_type="lineplot",
             xkey="env_volume",
             ykey="mean_s_step_mean",
             huekey="mean_agent_density",
             stylekey="mean_agent_density",
-            df_query="model == 'circles_spatial3D_rtc'",
+            df_query="model == ' cupy-grid'",
             sns_palette=SEQUENTIAL_PALETTE,
         ),
         PlotOptions(
-            filename="densit--step-s--volume--3drtc.png",
+            filename="densit--step-s--volume--cupy-grid.png",
             plot_type="lineplot",
             xkey="mean_agent_density",
             ykey="mean_s_step_mean",
             huekey="env_volume",
             stylekey="env_volume",
-            df_query="model == 'circles_spatial3D_rtc'",
+            df_query="model == ' cupy-grid'",
             sns_palette=SEQUENTIAL_PALETTE,
         )
     ],
@@ -653,7 +963,7 @@ PLOTS_PER_CSV={
             ykey="mean_s_step_mean",
             huekey="model",
             stylekey="model",
-            df_query="model == 'circles_spatial3D_rtc' or model == 'circles_bruteforce_rtc'",
+            # df_query="model == 'circles_spatial3D_rtc' or model == 'circles_bruteforce_rtc'",
             miny=0,
             maxy=0.15,
             sns_palette=SEQUENTIAL_PALETTE
@@ -713,7 +1023,7 @@ def plot_figures(processed_dataframes, output_dir, dpi, force, show, verbose):
             plots_to_generate = PLOTS_PER_CSV[csv_name]
             for plot_options in plots_to_generate:
                 plotted = plot_options.plot(processed_df, output_prefix, output_dir, dpi, force, show, verbose)
-    
+
 
 def main():
     # @todo - print some key info to stdout to complement the data? i.e. RTC time? This can just be fetched from the input csv.
@@ -728,7 +1038,7 @@ def main():
     # Load all input dataframes.
     input_dataframes = load_inputs(args.input_dir)
 
-    # Process the dataframes. 
+    # Process the dataframes.
     processed_dataframes = process_data(input_dataframes, args.verbose)
 
     # Store the processed dataframes on disk if an output dir is provided and/or print some stuff to console.
