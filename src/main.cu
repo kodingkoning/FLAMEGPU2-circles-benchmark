@@ -174,7 +174,9 @@ bool experiment_total_scale_all(custom_cli cli){
     std::vector<float> ENV_WIDTHS = {};
 
 
+    //const std::vector<float> TARGET_ENV_VOLUMES = {10000000, 20000000, 30000000, 40000000, 50000000, 60000000, 70000000, 80000000, 90000000, 100000000};
     const std::vector<float> TARGET_ENV_VOLUMES = {10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000, 900000, 1000000};
+    // const std::vector<float> TARGET_ENV_VOLUMES = {1000000};
     for(const float& targetVolume : TARGET_ENV_VOLUMES){
         const float envWidth = round(cbrt(targetVolume));
         const float actualVolume = envWidth * envWidth * envWidth;
@@ -188,8 +190,8 @@ bool experiment_total_scale_all(custom_cli cli){
     std::map<std::string, std::function<void(const RunSimulationInputs, RunSimulationOutputs&)>> MODELS = {
         {std::string("circles_spatial3D"), run_circles_spatial3D},
         {std::string("circles_spatial3D_rtc"), run_circles_spatial3D_rtc},
-        {std::string("circles_bruteforce"), run_circles_bruteforce},
-        {std::string("circles_bruteforce_rtc"), run_circles_bruteforce_rtc},
+        // {std::string("circles_bruteforce"), run_circles_bruteforce},
+        // {std::string("circles_bruteforce_rtc"), run_circles_bruteforce_rtc},
     };
 
     // Construct the vector of RunSimulationInputs to pass to the run_experiment method.
@@ -208,6 +210,78 @@ bool experiment_total_scale_all(custom_cli cli){
             COMM_RADIUS,
             SORT_PERIOD
         });
+    }
+
+    // Run the experriment
+    bool success = run_experiment(
+        EXPERIMENT_LABEL,
+        cli.device,
+        cli.repetitions,
+        INPUTS_STRUCTS,
+        MODELS,
+        cli.dry
+    );
+
+    return success;
+}
+
+bool experiment_step_count(custom_cli cli){
+    // Name the experiment - this will end up in filenames/paths.
+    const std::string EXPERIMENT_LABEL="step-count";
+
+    // Fixed comm radius
+    const float COMM_RADIUS = 2.f;
+    // Fixed density
+    const float DENSITY = 1.0f;
+    // Fixed sort period
+    const uint32_t SORT_PERIOD = 1u;
+
+    std::vector<uint32_t> STEP_COUNTS = {100, 200, 500, 1000, 2000};
+
+    // Sweep over environment widths, which lead to scaled
+    // Env width needs to be atleast 5 * comm_radius to not read all messages? (so that there are bins in atleast each dim?)
+    // @density 1, 8 width = 512 pop. 16 = 4k, 20 = 8k, 40 width = 64k pop, 100 = 1million.
+    // const std::vector<float> ENV_WIDTHS = {8.f, 12.f, 16.f, 20.f};
+    // const std::vector<float> ENV_WIDTHS = {8.f, 12.f, 16.f, 20.f, 30.f, 40.f, 50.f, 60.f, 70.f, 80.f, 90.f, 100.f};
+    std::vector<float> ENV_WIDTHS = {};
+
+
+    const std::vector<float> TARGET_ENV_VOLUMES = {10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000, 900000, 1000000};
+    for(const float& targetVolume : TARGET_ENV_VOLUMES){
+        const float envWidth = round(cbrt(targetVolume));
+        const float actualVolume = envWidth * envWidth * envWidth;
+        const float badness = (actualVolume - targetVolume) / targetVolume;
+        ENV_WIDTHS.push_back(envWidth);
+        // printf("targetVolume %f actualVolume %f width %f, volumeBadness %f\n", targetVolume, actualVolume, envWidth, badness);
+    }
+
+
+    // Select the models to execute.
+    std::map<std::string, std::function<void(const RunSimulationInputs, RunSimulationOutputs&)>> MODELS = {
+        {std::string("circles_spatial3D"), run_circles_spatial3D},
+        {std::string("circles_spatial3D_rtc"), run_circles_spatial3D_rtc},
+        // {std::string("circles_bruteforce"), run_circles_bruteforce},
+        // {std::string("circles_bruteforce_rtc"), run_circles_bruteforce_rtc},
+    };
+
+    // Construct the vector of RunSimulationInputs to pass to the run_experiment method.
+    auto INPUTS_STRUCTS = std::vector<RunSimulationInputs>();
+    // for(const auto& popSize : POPULATION_SIZES ){
+        // const float envWidth = static_cast<float>(ceil(cbrt(popSize)));
+    for(const auto& envWidth : ENV_WIDTHS ){
+        for(const auto& steps: STEP_COUNTS ){
+            const uint32_t popSize = static_cast<float>(ceil((envWidth * envWidth * envWidth) * DENSITY));
+            // Envwidth is scaled with population size.
+            INPUTS_STRUCTS.push_back({
+                cli.device,
+                steps,
+                cli.seed,
+                popSize,
+                envWidth,
+                COMM_RADIUS,
+                SORT_PERIOD
+            });
+        }
     }
 
     // Run the experriment
@@ -368,10 +442,10 @@ bool experiment_sort_period(custom_cli cli){
     // Name the experiment - this will end up in filenames/paths.
     const std::string EXPERIMENT_LABEL="sort-period";
 
-    const uint32_t popSize = 64000;
-    const float ENV_WIDTH = 40.0f;
+    const uint32_t popSize = 1000000;
+    const float ENV_WIDTH = 50.0f;
 
-    const std::vector<float> comm_radii = {2.0f, 4.0f, 6.0f, 8.0f};
+    const std::vector<float> comm_radii = {1.0f, 2.0f, 4.0f, 6.0f, 8.0f};
     const std::vector<uint32_t> sortPeriods = {0u, 1u, 2u, 5u, 10u, 20u, 50u, 100u, 200u};
 
     // Select the models to execute.
@@ -423,8 +497,8 @@ bool experiment_comm_radius(custom_cli cli){
     std::map<std::string, std::function<void(const RunSimulationInputs, RunSimulationOutputs&)>> MODELS = {
         {std::string("circles_spatial3D"), run_circles_spatial3D},
         {std::string("circles_spatial3D_rtc"), run_circles_spatial3D_rtc},
-        {std::string("circles_bruteforce"), run_circles_bruteforce},
-        {std::string("circles_bruteforce_rtc"), run_circles_bruteforce_rtc},
+        // {std::string("circles_bruteforce"), run_circles_bruteforce},
+        // {std::string("circles_bruteforce_rtc"), run_circles_bruteforce_rtc},
     };
 
     // Construct the vector of RunSimulationInputs to pass to the run_experiment method.
@@ -461,7 +535,7 @@ bool experiment_profiling(custom_cli cli) {
 
     const uint32_t popSize = 1000000;
     const float ENV_WIDTH = 50.0f;
-    const uint32_t SORT_PERIOD = 0u;
+    const uint32_t SORT_PERIOD = 1u;
     const std::vector<float> comm_radii = {1.0f};
 
     // Select the models to execute.
@@ -506,15 +580,23 @@ int main(int argc, const char ** argv) {
     custom_cli cli = parse_custom_cli(argc, argv);
 
     // Launch each experiment.
-    // bool success_1 = experiment_total_scale_all(cli);
+    std::vector<bool> successes = {};
+    // successes.push_back(experiment_comm_radius(cli));
+    successes.push_back(experiment_profiling(cli));
+    // successes.push_back(experiment_step_count(cli));
+    successes.push_back(experiment_total_scale_all(cli));
     // bool success_2 = experiment_density_spatial(cli);
-    // bool success_3 = experiment_comm_radius(cli);
-    bool success_1 = experiment_sort_period(cli);
+    // bool success_1 = experiment_comm_radius(cli);
+    // bool success_1 = experiment_sort_period(cli);
 
     // bool success_1 = experiment_high_density(cli);
     // bool success_1 = experiment_profiling(cli);
 
     // exit code
-    return success_1 ? EXIT_SUCCESS : EXIT_FAILURE;
+    for(bool success : successes) {
+        if (!success) return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+    // return success_1 ? EXIT_SUCCESS : EXIT_FAILURE;
     // return success_1 && success_2 && success_3 && success_4 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

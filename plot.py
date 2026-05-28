@@ -29,17 +29,21 @@ FIGSIZE_INCHES = (16, 9)
 # CSV files that should be preset in the input directory.
 EXPECTED_CSV_FILES=[
     "fixed-density_perSimulationCSV.csv",
+    "fixed-density_diff__perSimulationCSV.csv",
     # "fixed-density_perStepPerSimulationCSV.csv",
     "variable-density_perSimulationCSV.csv",
     # "variable-density_perStepPerSimulationCSV.csv",
     "comm-radius_perSimulationCSV.csv",
     # "comm-radius_perStepPerSimulationCSV.csv",
     "sort-period_perSimulationCSV.csv",
-    # "sort-period_perStepPerSimulationCSV.csv",
+    "sort-period_perStepPerSimulationCSV.csv",
     "data-type_perSimulationCSV.csv",
     "dimensions_perSimulationCSV.csv",
     "high-density_perSimulationCSV.csv",
-    "model-type_perSimulationCSV.csv"
+    "model-type_perSimulationCSV.csv",
+    "step-count_perSimulationCSV.csv",
+    "block-size_perSimulationCSV.csv",
+    "grid-stride_perSimulationCSV.csv",
 ]
 
 
@@ -58,7 +62,9 @@ GROUP_BY_COLUMNS_PER_SIM = ["GPU","release_mode","seatbelts_on","model","steps",
 
 # Handle columns which only appear in specific files
 FILE_SPECIFIC_COLUMNS = {
-   'sort-period_perSimulationCSV.csv': "sort_period"
+   'sort-period_perSimulationCSV.csv': "sort_period",
+   'block-size_perSimulationCSV.csv': "block_size",
+   'grid-stride_perSimulationCSV.csv': "max_threads",
 }
 
 # Aggregate operations to apply across grouped csv rows, for the per-step per-sim csvs
@@ -202,6 +208,8 @@ def process_data(input_dataframes, verbose):
 
         # Columns to group data by - i.e. identify repetitions of a single run
         group_by_columns = GROUP_BY_COLUMNS_PER_STEP_PER_SIM if csv_is_per_step else GROUP_BY_COLUMNS_PER_SIM
+        # NOTE: I think that these are pass by reference, so when something is added to them below, it is added for the rest of the run,
+        # and so if it's issing in a file that is processed later, then that causes an error
 
         # Handle file specific columns
         if csv_name in FILE_SPECIFIC_COLUMNS:
@@ -296,7 +304,9 @@ MANUAL_PRETTY_CSV_KEY_MAP = {
     "mean_s_step": "Average Step Time (s)",
     "mean_agent_density": "Agent Density",
     "env_volume": "Environment Volume",
-    "sort_period": "Sort Period (steps)"
+    "sort_period": "Sort Period (steps)",
+    "block_size": "Number of threads in a GPU block",
+    "max_threads": "Maximum number of threads for invoking a kernel"
 }
 
 def pretty_csv_key(csv_key):
@@ -520,6 +530,8 @@ class PlotOptions:
         if show: # or output_dir is None:
             plt.show()
 
+        plt.close()
+
         return True
 
 QUALITATIVE_PALETTE = "Dark2"
@@ -567,6 +579,18 @@ PLOTS_PER_CSV={
         #     maxy=1000,
         # ),
         PlotOptions(
+            filename="agent_count--step-s--model--10k.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            df_query="agent_count < 40000000",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
             filename="agent_count--step-s--model--all.png",
             plot_type="lineplot",
             xkey="agent_count",
@@ -603,6 +627,94 @@ PLOTS_PER_CSV={
         #     miny=0,
         #     maxy=1000,
         # )
+    ],
+    "fixed-density_diff__perSimulationCSV.csv": [
+        PlotOptions(
+            filename="diff--step-s--model.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            df_query="model == ' diff'",
+            # minx=0,
+            # miny=0
+        ),
+        PlotOptions(
+            filename="speedup--step-s--model.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            df_query="model == ' speedup'",
+            # minx=0,
+            # miny=0
+        ),
+    ],
+    "step-count_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="step_count--model--circles_spatial3D.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="steps",
+            stylekey="steps",
+            sns_palette=QUALITATIVE_PALETTE,
+            df_query="model == ' circles_spatial3D'",
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="step_count--model--circles_spatial3D_rtc.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="steps",
+            stylekey="steps",
+            sns_palette=QUALITATIVE_PALETTE,
+            df_query="model == ' circles_spatial3D_rtc'",
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="step_count--model--cupy-grid.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="steps",
+            stylekey="steps",
+            sns_palette=QUALITATIVE_PALETTE,
+            df_query="model == ' cupy-grid'",
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="step_count--agents--1M--model--all.png",
+            plot_type="lineplot",
+            xkey="steps",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            df_query="agent_count == 1000000",
+            minx=0,
+            miny=0
+        ),
+        PlotOptions(
+            filename="step_count--agents--500K--model--all.png",
+            plot_type="lineplot",
+            xkey="steps",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            df_query="agent_count == 500000",
+            minx=0,
+            miny=0
+        ),
     ],
     "high-density_perSimulationCSV.csv": [
         PlotOptions(
@@ -920,6 +1032,30 @@ PLOTS_PER_CSV={
         #     sns_palette=SEQUENTIAL_PALETTE,
         # )
     ],
+    "block-size_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="block-size.png",
+            plot_type="lineplot",
+            xkey="block_size",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            # df_query="model == ' grid'",
+            sns_palette=SEQUENTIAL_PALETTE,
+        ),
+    ],
+    "grid-stride_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="grid-stride-max_threads-block_size.png",
+            plot_type="lineplot",
+            xkey="block_size",
+            ykey="mean_s_step_mean",
+            huekey="max_threads",
+            stylekey="max_threads",
+            # df_query="model == ' circles_spatial3D_rtc'",
+            sns_palette=SEQUENTIAL_PALETTE,
+        ),
+    ],
     # Worth using a sequential colour pallette here.
     "variable-density_perSimulationCSV.csv": [
         # PlotOptions(
@@ -931,6 +1067,26 @@ PLOTS_PER_CSV={
         #     df_query="model == 'circles_spatial3D_rtc'",
         #     sns_palette=SEQUENTIAL_PALETTE,
         # ),
+        PlotOptions(
+            filename="volume--step-s--density--circles_spatial3D_rtc.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="mean_agent_density",
+            stylekey="mean_agent_density",
+            df_query="model == ' circles_spatial3D_rtc'",
+            sns_palette=SEQUENTIAL_PALETTE,
+        ),
+        PlotOptions(
+            filename="volume--step-s--density--cupy-rect_by_cell_x_rtc.png",
+            plot_type="lineplot",
+            xkey="env_volume",
+            ykey="mean_s_step_mean",
+            huekey="mean_agent_density",
+            stylekey="mean_agent_density",
+            df_query="model == ' cupy-rect_by_cell_x'",
+            sns_palette=SEQUENTIAL_PALETTE,
+        ),
         PlotOptions(
             filename="volume--step-s--density--cupy-grid.png",
             plot_type="lineplot",
@@ -1001,10 +1157,65 @@ PLOTS_PER_CSV={
             ykey="mean_s_step_mean",
             huekey="model",
             stylekey="comm_radius",
-            df_query="sort_period <= 20 and (model == 'circles_spatial3D_rtc' or model == 'circles_spatial3D')",
+            df_query="sort_period <= 20",
             miny=0,
             sns_palette=SEQUENTIAL_PALETTE
-        )
+        ),
+        PlotOptions(
+            filename="lineplot--sort_period--radius-1.png",
+            plot_type="lineplot",
+            xkey="sort_period",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="comm_radius",
+            df_query="comm_radius == 1",
+            miny=0,
+            sns_palette=SEQUENTIAL_PALETTE
+        ),
+        PlotOptions(
+            filename="lineplot--sort_period--radius-2.png",
+            plot_type="lineplot",
+            xkey="sort_period",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="comm_radius",
+            df_query="comm_radius == 2",
+            miny=0,
+            sns_palette=SEQUENTIAL_PALETTE
+        ),
+        PlotOptions(
+            filename="lineplot--sort_period--radius-4.png",
+            plot_type="lineplot",
+            xkey="sort_period",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="comm_radius",
+            df_query="comm_radius == 4",
+            miny=0,
+            sns_palette=SEQUENTIAL_PALETTE
+        ),
+        PlotOptions(
+            filename="lineplot--sort_period--radius-6.png",
+            plot_type="lineplot",
+            xkey="sort_period",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="comm_radius",
+            df_query="comm_radius == 6",
+            miny=0,
+            sns_palette=SEQUENTIAL_PALETTE
+        ),
+        PlotOptions(
+            filename="lineplot--sort_period--radius-8.png",
+            plot_type="lineplot",
+            xkey="sort_period",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="comm_radius",
+            df_query="comm_radius == 8",
+            miny=0,
+            sns_palette=SEQUENTIAL_PALETTE
+        ),
     ]
 }
 
