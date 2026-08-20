@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.ticker as ticker
 import seaborn as sns
 
 # DEFAULT_INPUT_DIR = "./sample/data/v100-470.82.01/alpha.2-v100-11.0-beltsoff"
@@ -417,6 +418,10 @@ class PlotOptions:
         g = None
         if self.plot_type == "lineplot":
             # plot the data @todo - lineplot vs scatter?
+
+            ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'{x/1e6:.0f}M'))
+            ax.set_xlabel(f'{self.xkey} (millions)')  # optional: update label for clarity
+
             g = sns.lineplot(
                 data=df,
                 x=self.xkey,
@@ -470,7 +475,7 @@ class PlotOptions:
             ax.set_ylim(top=self.maxy)
 
         # Disable scientific notation on axes
-        ax.ticklabel_format(useOffset=False, style='plain')
+        # ax.ticklabel_format(useOffset=False, style='plain')
 
         # If there is reason to have a legend, do some extra processing.
         if ax.get_legend() is not None:
@@ -600,6 +605,30 @@ PLOTS_PER_CSV={
             sns_palette=QUALITATIVE_PALETTE,
             minx=0,
             miny=0
+        ),
+        PlotOptions(
+            filename="agent_count--step-s--model--zoomed--5M-agents.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            df_query="agent_count <= 6000000",
+            minx=0,
+            miny=0,
+        ),
+        PlotOptions(
+            filename="agent_count--step-s--model--zoomed--10M-agents.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            df_query="agent_count <= 11000000",
+            minx=0,
+            miny=0,
         ),
         PlotOptions(
             filename="agent_count--step-s--model--zoomed.png",
