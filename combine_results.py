@@ -1,4 +1,5 @@
 import csv
+import re
 
 # GPU,release_mode,seatbelts_on,model,steps,agent_count,env_width,comm_radius,sort_period,repeat,agent_density,mean_message_count,s_rtc,s_simulation,s_init,s_exit,s_step_mean
 
@@ -15,43 +16,54 @@ FLAME_SIM_EXT = "_perSimulationCSV.csv"
 CUPY_SIM_EXT = "_perSimulation_CSV.csv"
 OUT_EXT = FLAME_SIM_EXT
 
+DEFAULT_HEADER = ["GPU", "release_mode", "seatbelts_on", "model", "steps", "agent_count", "env_width", "comm_radius", "sort_period", "repeat", "agent_density", "mean_message_count", "s_rtc", "s_simulation", "s_init", "s_exit", "s_step_mean"]
+# Experiments with extra columns, inserted after sort_period when there are no FLAME results to take the header from
+EXTRA_COLUMNS = {
+    "grid-stride": ["block_size", "max_threads"],
+    "block-size": ["block_size", "max_threads"],
+}
+
+def clean_dtype(dtype):
+    # e.g. "<class 'numpy.float32'>-<class 'numpy.int64'>" -> "float32-int64"
+    return re.sub(r"<class 'numpy\.(\w+)'>", r"\1", dtype)
+
+def cupy_model_name(label, row):
+    name = f"cupy-{row['model']}"
+    if label == "dimensions":
+        name += f" {row['dimensions']}D"
+    elif label == "data-type":
+        name += f" {clean_dtype(row['dtype'])}"
+    return name
+
+def cupy_output_row(label, row, header):
+    # Values FLAME records that cupy doesn't; any other column missing from the cupy CSV is also filled with 0
+    values = dict(row, release_mode=1, seatbelts_on=0, mean_message_count=0, s_rtc=0)
+    values['model'] = cupy_model_name(label, row)
+    return [str(values.get(column, 0)) for column in header]
+
 for LABEL in LABELS:
     try:
-        with open(f"{FLAME_DIR}/{LABEL}{FLAME_SIM_EXT}") as flame_input:
-            flame_reader = csv.reader(flame_input, delimiter=',', quotechar='|')
-
-            with open(f"{CUPY_DIR}/{LABEL}{CUPY_SIM_EXT}") as cupy_input:
-                cupy_reader = csv.DictReader(cupy_input)
-
-                with open(f"{OUT_DIR}/{LABEL}{OUT_EXT}", 'w') as fout:
-                    for row in flame_reader:
-                        print(', '.join(row), file=fout)
-                    for row in cupy_reader:
-                        print(f"{row['GPU']}, 1, 0, cupy-{row['model']}, {row['steps']}, {row['agent_count']}, {row['env_width']}, {row['comm_radius']}, {row['sort_period']}, {row['repeat']}, {row['agent_density']}, 0, 0, {row['s_simulation']}, {row['s_init']}, {row['s_exit']}, {row['s_step_mean']}", file=fout)
-
+        cupy_input = open(f"{CUPY_DIR}/{LABEL}{CUPY_SIM_EXT}")
     except FileNotFoundError:
-        with open(f"{CUPY_DIR}/{LABEL}{CUPY_SIM_EXT}") as cupy_input:
-            cupy_reader = csv.DictReader(cupy_input)
-            with open(f"{OUT_DIR}/{LABEL}{OUT_EXT}", 'w') as fout:
-                if LABEL == "grid-stride" or LABEL == "block-size":
-                    print("GPU, release_mode, seatbelts_on, model, steps, agent_count, env_width, comm_radius, sort_period, block_size, max_threads, repeat, agent_density, mean_message_count, s_rtc, s_simulation, s_init, s_exit, s_step_mean", file=fout)
-                    for row in cupy_reader:
-                        print(f"{row['GPU']}, 1, 0, cupy-{row['model']}, {row['steps']}, {row['agent_count']}, {row['env_width']}, {row['comm_radius']}, {row['sort_period']}, {row['block_size']}, {row['max_threads']}, {row['repeat']}, {row['agent_density']}, 0, 0, {row['s_simulation']}, {row['s_init']}, {row['s_exit']}, {row['s_step_mean']}", file=fout)
-                else:
-                    print("GPU, release_mode, seatbelts_on, model, steps, agent_count, env_width, comm_radius, sort_period, repeat, agent_density, mean_message_count, s_rtc, s_simulation, s_init, s_exit, s_step_mean", file=fout)
-                if LABEL == "dimensions":
-                    for row in cupy_reader:
-                        print(f"{row['GPU']}, 1, 0, cupy-{row['model']} {row['dimensions']}D, {row['steps']}, {row['agent_count']}, {row['env_width']}, {row['comm_radius']}, {row['sort_period']}, {row['repeat']}, {row['agent_density']}, 0, 0, {row['s_simulation']}, {row['s_init']}, {row['s_exit']}, {row['s_step_mean']}", file=fout)
-                elif LABEL == "data-type":
-                    for row in cupy_reader:
-                        if row['dtype'] == "<class 'numpy.float32'>":
-                            row['dtype'] = "float32"
-                        elif row['dtype'] == "<class 'numpy.float64'>":
-                            row['dtype'] = "float64"
-                        print(f"{row['GPU']}, 1, 0, cupy-{row['model']} {row['dtype']}, {row['steps']}, {row['agent_count']}, {row['env_width']}, {row['comm_radius']}, {row['sort_period']}, {row['repeat']}, {row['agent_density']}, 0, 0, {row['s_simulation']}, {row['s_init']}, {row['s_exit']}, {row['s_step_mean']}", file=fout)
-                else:
-                    for row in cupy_reader:
-                        print(f"{row['GPU']}, 1, 0, cupy-{row['model']}, {row['steps']}, {row['agent_count']}, {row['env_width']}, {row['comm_radius']}, {row['sort_period']}, {row['repeat']}, {row['agent_density']}, 0, 0, {row['s_simulation']}, {row['s_init']}, {row['s_exit']}, {row['s_step_mean']}", file=fout)
+        print(f"No cupy results for {LABEL}, skipping")
+        continue
+
+    with cupy_input, open(f"{OUT_DIR}/{LABEL}{OUT_EXT}", 'w') as fout:
+        try:
+            with open(f"{FLAME_DIR}/{LABEL}{FLAME_SIM_EXT}") as flame_input:
+                flame_reader = csv.reader(flame_input, delimiter=',', quotechar='|')
+                header = [column.strip() for column in next(flame_reader)]
+                print(', '.join(header), file=fout)
+                for row in flame_reader:
+                    print(', '.join(row), file=fout)
+        except FileNotFoundError:
+            extra = EXTRA_COLUMNS.get(LABEL, [])
+            split = DEFAULT_HEADER.index("sort_period") + 1
+            header = DEFAULT_HEADER[:split] + extra + DEFAULT_HEADER[split:]
+            print(', '.join(header), file=fout)
+
+        for row in csv.DictReader(cupy_input):
+            print(', '.join(cupy_output_row(LABEL, row, header)), file=fout)
 
 DIFF_LABELS = ["fixed-density"]
 
