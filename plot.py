@@ -4,6 +4,7 @@ import os
 import sys
 import argparse
 import pathlib
+import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -20,7 +21,7 @@ DEFAULT_OUTPUT_DIR = "./build/figures"
 # Maximum DPI
 MAX_SANE_DPI = 1000
 # Default DPI
-DEFAULT_DPI = 96
+DEFAULT_DPI = 300
 
 LEGEND_BORDER_PAD = 0.5
 
@@ -30,7 +31,10 @@ FIGSIZE_INCHES = (16, 9)
 # CSV files that should be preset in the input directory.
 EXPECTED_CSV_FILES=[
     "fixed-density_perSimulationCSV.csv",
+    "fixed-density-int64_perSimulationCSV.csv",
     "fixed-density_diff__perSimulationCSV.csv",
+    "add-agents_perSimulationCSV.csv",
+    "delete-agents_perSimulationCSV.csv",
     # "fixed-density_perStepPerSimulationCSV.csv",
     "variable-density_perSimulationCSV.csv",
     # "variable-density_perStepPerSimulationCSV.csv",
@@ -318,6 +322,25 @@ def pretty_csv_key(csv_key):
         pretty_key = MANUAL_PRETTY_CSV_KEY_MAP[csv_key]
     return pretty_key
 
+def natural_order(values):
+    """Sort labels that start with numbers when there are at least two."""
+    values = list(values)
+    numeric_indices = [
+        index for index, value in enumerate(values)
+        if re.match(r"\d+", str(value))
+    ]
+    if len(numeric_indices) < 2:
+        return None
+
+    numeric_values = sorted(
+        (values[index] for index in numeric_indices),
+        key=lambda value: int(re.match(r"\d+", str(value)).group()),
+    )
+    ordered_values = values.copy()
+    for index, value in zip(numeric_indices, numeric_values):
+        ordered_values[index] = value
+    return ordered_values
+
 # No longer using @dataclass for py < 3.7
 class PlotOptions:
     """Class for options for a single plot"""
@@ -379,6 +402,7 @@ class PlotOptions:
 
         # Filter the data using pandas queries if required.
         if self.df_query is not None and len(self.df_query):
+            # print(f"Filtering data\n{df} by {self.df_query}")
             df = df.query(self.df_query)
 
         # If the df is empty, skip.
@@ -388,6 +412,8 @@ class PlotOptions:
 
         # Get the number of palette values required.
         huecount = len(df[self.huekey].unique()) if self.huekey is not None else 1
+        hue_order = natural_order(df[self.huekey].unique()) if self.huekey is not None else None
+        style_order = natural_order(df[self.stylekey].unique()) if self.stylekey is not None else None
 
         # Set palette.
         palette = sns.color_palette(self.sns_palette, huecount)
@@ -419,7 +445,17 @@ class PlotOptions:
         if self.plot_type == "lineplot":
             # plot the data @todo - lineplot vs scatter?
 
-            ax.xaxis.set_major_formatter(ticker.FuncFormatter(lambda x, _: f'{x/1e6:.0f}M'))
+            def human_x_axis_format(x, _):
+                if x >= 1e9:
+                    return f'{x/1e9:.1f}B'
+                elif x >= 1e6:
+                    return f'{x/1e6:.0f}M'
+                elif x >= 1e3:
+                    return f'{x/1e3:.0f}K'
+                else:
+                    return f'{x:.0f}'
+
+            ax.xaxis.set_major_formatter(ticker.FuncFormatter(human_x_axis_format))
             ax.set_xlabel(f'{self.xkey} (millions)')  # optional: update label for clarity
 
             g = sns.lineplot(
@@ -428,6 +464,8 @@ class PlotOptions:
                 y=self.ykey,
                 hue=self.huekey,
                 style=self.stylekey,
+                hue_order=hue_order,
+                style_order=style_order,
                 markers=True,
                 dashes = True,
                 ax=ax,
@@ -442,6 +480,8 @@ class PlotOptions:
                 y=self.ykey,
                 hue=self.huekey,
                 style=self.stylekey,
+                hue_order=hue_order,
+                style_order=style_order,
                 markers=True,
                 ax=ax,
                 # size=6,
@@ -657,6 +697,19 @@ PLOTS_PER_CSV={
         #     maxy=1000,
         # )
     ],
+    "fixed-density-int64_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="agent_count--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="agent_count",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+    ],
     "fixed-density_diff__perSimulationCSV.csv": [
         PlotOptions(
             filename="diff--step-s--model.png",
@@ -681,6 +734,32 @@ PLOTS_PER_CSV={
             df_query="model == ' speedup'",
             # minx=0,
             # miny=0
+        ),
+    ],
+    "add-agents_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="volume--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="env_width",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
+        ),
+    ],
+    "delete-agents_perSimulationCSV.csv": [
+        PlotOptions(
+            filename="volume--step-s--model--all.png",
+            plot_type="lineplot",
+            xkey="env_width",
+            ykey="mean_s_step_mean",
+            huekey="model",
+            stylekey="model",
+            sns_palette=QUALITATIVE_PALETTE,
+            minx=0,
+            miny=0
         ),
     ],
     "step-count_perSimulationCSV.csv": [
@@ -1142,15 +1221,15 @@ PLOTS_PER_CSV={
     ],
     "comm-radius_perSimulationCSV.csv": [
         PlotOptions(
-            filename="lineplot-spatial3D-bruteforce-rtc-only.png",
+            filename="lineplot-8-gpus-only.png",
             plot_type="lineplot",
             xkey="comm_radius_as_percentage_env_width",
             ykey="mean_s_step_mean",
             huekey="model",
             stylekey="model",
-            # df_query="model == 'circles_spatial3D_rtc' or model == 'circles_bruteforce_rtc'",
+            df_query="model == 'cupy 8 GPUs'", #or model == 'circles_bruteforce_rtc'",
             miny=0,
-            maxy=0.15,
+            #maxy=0.15,
             sns_palette=SEQUENTIAL_PALETTE
         ),
         PlotOptions(
